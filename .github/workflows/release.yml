@@ -203,12 +203,18 @@ jobs:
           path: |
             TMessagesProj/src/main/libs
           key: ${{ hashFiles('TMessagesProj/jni/**', 'ffmpeg_status', 'boringssl_status') }}-arm64-v8a
+
+          
       - name: Configure Gradle
         run: |
           sed -i "s/2000000000000/$(date +%s%3N)/g" gradle.properties
           echo "sdk.dir=${ANDROID_HOME}" >> local.properties
+
+          
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
+
+        
       - name: Generate signing keystore
         run: |
           KEYSTORE_PASS="nagram"
@@ -216,6 +222,8 @@ jobs:
           ALIAS_PASS="nagram"
           KEYSTORE_PATH="TMessagesProj/release.keystore"
           rm -f "$KEYSTORE_PATH"
+          
+          # توليد ملف الـ keystore
           keytool -genkey -v \
             -keystore "$KEYSTORE_PATH" \
             -alias "$ALIAS_NAME" \
@@ -225,9 +233,22 @@ jobs:
             -storepass "$KEYSTORE_PASS" \
             -keypass "$ALIAS_PASS" \
             -dname "CN=Nagram, OU=Dev, O=Nagram, L=Global, S=Global, C=US"
-          # Build LOCAL_PROPERTIES from individual secrets
-          LOCAL_PROPS="KEYSTORE_PASS=$KEYSTORE_PASS\nALIAS_NAME=$ALIAS_NAME\nALIAS_PASS=$ALIAS_PASS\nTELEGRAM_APP_ID=${{ secrets.TELEGRAM_APP_ID }}\nTELEGRAM_APP_HASH=${{ secrets.TELEGRAM_APP_HASH }}"
-          echo "LOCAL_PROPERTIES=$(printf '%s' "$LOCAL_PROPS" | base64 -w 0)" >> $GITHUB_ENV
+          
+          # إنشاء ملف مؤقت يحتوي على الأسطر بشكل صحيح ونظيف
+          cat << EOF > temp.properties
+          KEYSTORE_PASS=$KEYSTORE_PASS
+          ALIAS_NAME=$ALIAS_NAME
+          ALIAS_PASS=$ALIAS_PASS
+          TELEGRAM_APP_ID=${{ secrets.TELEGRAM_APP_ID }}
+          TELEGRAM_APP_HASH=${{ secrets.TELEGRAM_APP_HASH }}
+          EOF
+          
+          # تشفير الملف إلى Base64 وتمريره للمتغير الإقليمي لـ GitHub Actions
+          echo "LOCAL_PROPERTIES=$(base64 -w 0 temp.properties)" >> $GITHUB_ENV
+          
+          # تنظيف الملف المؤقت
+          rm temp.properties
+
       - name: Write Firebase google-services.json
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
