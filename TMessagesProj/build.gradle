@@ -9,9 +9,13 @@ apply plugin: "io.objectbox"
 
 def verName = APP_VERSION_NAME
 def verCode = 1238
+
+
 def officialVer = APP_VERSION_NAME
 def officialCode = APP_VERSION_CODE
+
 def serviceAccountCredentialsFile = rootProject.file("service_account_credentials.json")
+
 def beta = verName.contains("preview")
 
 if (serviceAccountCredentialsFile.isFile()) {
@@ -38,7 +42,7 @@ def alias = null
 def pwd = null
 def sentry_token = System.getenv("SENTRY_AUTH_TOKEN")
 def nagram_build_args = System.getenv("NAGRAM_BUILD_ARGS")
-def sentry_upload = project.rootProject.file("sentry.properties").exists()
+def sentry_upload =  project.rootProject.file("sentry.properties").exists()
 def disableCMakeRelWithDebInfo = System.getenv("COMPILE_NATIVE") == null
 
 Properties properties
@@ -76,31 +80,56 @@ if (nativeTarget == null) nativeTarget = ""
 android {
     compileSdkVersion 35
     buildToolsVersion '35.0.0'
-    ndkVersion rootProject.ext.ndkVersion
+    ndkVersion rootProject.ext.ndkVersion // 27.2.12479018
 
     defaultConfig.applicationId = "xyz.nextalone.nagram"
 
     sourceSets {
-        main { assets.srcDirs = ["src/main/assets"] }
-        debug { java { srcDirs "src/main/java" }; jniLibs { srcDir "src/main/libs" } }
-        release { java { srcDirs "src/main/java" }; jniLibs { srcDir "src/main/libs" } }
+
+        main {
+            assets.srcDirs = ["src/main/assets"]
+        }
+
+        debug {
+            java {
+                srcDirs "src/main/java"
+            }
+            jniLibs {
+                srcDir "src/main/libs"
+            }
+        }
+
+        release {
+            java {
+                srcDirs "src/main/java"
+            }
+            jniLibs {
+                srcDir "src/main/libs"
+            }
+        }
     }
 
     externalNativeBuild {
-        cmake { path "jni/CMakeLists.txt" }
+        cmake {
+            path "jni/CMakeLists.txt"
+        }
     }
 
     lintOptions {
-        disable 'MissingTranslation', 'ExtraTranslation', 'BlockedPrivateApi'
+        disable 'MissingTranslation'
+        disable 'ExtraTranslation'
+        disable 'BlockedPrivateApi'
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
+
         coreLibraryDesugaringEnabled true
     }
 
     splits {
+
         abi {
             if (targetTask.contains("fdroid")) {
                 enable false
@@ -109,20 +138,28 @@ android {
                 enable true
                 reset()
                 universalApk false
-                if (!nativeTarget.isBlank()) { include nativeTarget } else { include 'armeabi-v7a', 'arm64-v8a' }
+                if (!nativeTarget.isBlank()) {
+                    include nativeTarget
+                } else {
+                    include 'armeabi-v7a', 'arm64-v8a'
+                }
             }
         }
+
     }
 
     defaultConfig {
         minSdkVersion 21
+        //noinspection ExpiredTargetSdkVersion,OldTargetApi
         targetSdkVersion 35
+
         versionName verName
         versionCode verCode
-        resConfigs "en", "ar"
 
         def appId = "11535358"
         def appHash = "33d372962fadb01df47e6ceed4e33cd6"
+
+        //obtain your own keys at https://core.telegram.org/api/obtaining_api_id
 
         if (properties != null) {
             appId = properties.getProperty("TELEGRAM_APP_ID") ?: System.getenv("TELEGRAM_APP_ID") ?: appId
@@ -138,23 +175,24 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=c++_static', 
-          '-DANDROID_PLATFORM=android-21', 
-          '-DCMAKE_BUILD_TYPE=Release', 
-          '-DCMAKE_C_FLAGS=-Os -g0', 
-          '-DCMAKE_CXX_FLAGS=-Os -g0'
-
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21' //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
             }
         }
     }
 
     bundle {
-        language { enableSplit = false }
+        language {
+            enableSplit = false
+        }
     }
 
-    kotlinOptions { jvmTarget = JavaVersion.VERSION_11.toString() }
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_11.toString()
+    }
 
-    testOptions { unitTests.includeAndroidResources = true }
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
 
     signingConfigs {
         release {
@@ -174,6 +212,7 @@ android {
             zipAlignEnabled true
             signingConfig signingConfigs.release
         }
+
         release {
             debuggable false
             jniDebuggable false
@@ -181,11 +220,9 @@ android {
             shrinkResources true
             multiDexEnabled true
             zipAlignEnabled true
-            crunchPngs true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             matchingFallbacks = ["release", "debug"]
             signingConfig signingConfigs.release
-            ndk { debugSymbolLevel 'NONE' }
         }
     }
 
@@ -197,38 +234,58 @@ android {
             useLegacyPackaging true
         }
         resources {
-            excludes += ['/fabric/**', '/META-INF/*.version', '/META-INF/*.kotlin_module', '/META-INF/native-image/**', '/builddef.lst', '/*.txt', '/DebugProbesKt.bin', '/okhttp3/internal/publicsuffix/NOTICE', "META-INF/INDEX.LIST"]
+            excludes += ['/fabric/**', '/META-INF/*.version', '/META-INF/*.kotlin_module', '/META-INF/native-image/**', '/builddef.lst', '/*.txt', '/DebugProbesKt.bin', '/okhttp3/internal/publicsuffix/NOTICE']
+            excludes += ["META-INF/INDEX.LIST"]  // hutool
         }
-        doNotStrip "*/libtmessages.so"
+
         def lib = "libtmessages.*.so"
         pickFirst "lib/armeabi-v7a/$lib"
         pickFirst "lib/arm64-v8a/$lib"
     }
 
-    buildFeatures { buildConfig true }
+    buildFeatures {
+        buildConfig true
+    }
 
     tasks.configureEach { task ->
         if (((task.name.endsWith("Ndk") || task.name.startsWith("generateJsonModel") || task.name.startsWith("externalNativeBuild"))) && !task.name.contains("Debug")) {
             task.enabled = false
         }
-        if (task.name.contains("uploadCrashlyticsMappingFile")) { enabled = false }
-        if (disableCMakeRelWithDebInfo && task.name.contains("CMakeRelWithDebInfo")) { task.enabled = false }
-        if (task.name.startsWith("uploadCrashlyticsMappingFile")) { task.enabled = false }
-        else if (task.name.contains("Crashlytics") && task.name.contains("NoGcm")) { task.enabled = false }
-        else if (task.name.endsWith("GoogleServices") && task.name.contains("NoGcm")) { task.enabled = false }
-        else if (task.name.contains("buildCMakeDebug") && nagram_build_args != null && nagram_build_args.contains("skip_buildCMakeDebug")) { task.enabled = false }
+        if (task.name.contains("uploadCrashlyticsMappingFile")) {
+            enabled = false
+        }
+        if (disableCMakeRelWithDebInfo && task.name.contains("CMakeRelWithDebInfo")) {
+            enabled = false
+        }
+    }
+
+    tasks.configureEach { task ->
+        if (task.name.startsWith("uploadCrashlyticsMappingFile")) {
+            task.enabled = false
+        } else if (task.name.contains("Crashlytics") && task.name.contains("NoGcm")) {
+            task.enabled = false
+        } else if (task.name.endsWith("GoogleServices") && task.name.contains("NoGcm")) {
+            task.enabled = false
+        } else if (task.name.contains("buildCMakeDebug") && nagram_build_args != null && nagram_build_args.contains("skip_buildCMakeDebug")) {
+            task.enabled = false
+        }
     }
 
     applicationVariants.configureEach { variant ->
         variant.outputs.configureEach { output ->
             String gramName = "Nagram"
             String first = String.format("%s-v%s(%s)", gramName, versionName, versionCode)
-            String name = outputFileName.replace("TMessagesProj", first).replace("-release", "")
+            String name = outputFileName.replace("TMessagesProj", first)
+            name = name.replace("-release", "")
             outputFileName = name
         }
     }
+
     namespace "org.telegram.messenger"
 }
+
+def fcmVersion = "23.4.1"
+def crashlyticsVersion = "18.6.2"
 
 dependencies {
     implementation 'androidx.fragment:fragment:1.8.9'
@@ -239,13 +296,19 @@ dependencies {
     implementation "androidx.sharetarget:sharetarget:1.2.0"
     implementation "androidx.interpolator:interpolator:1.0.0"
     implementation 'androidx.biometric:biometric:1.1.0'
-    implementation ('com.google.android.gms:play-services-cast-framework:21.4.0') { exclude group: 'androidx.recyclerview', module: "recyclerview" }
-    implementation ("androidx.mediarouter:mediarouter:1.7.0") { exclude group: 'androidx.recyclerview', module: "recyclerview" }
+
+    implementation ('com.google.android.gms:play-services-cast-framework:21.4.0') {
+        exclude group: 'androidx.recyclerview', module: "recyclerview"
+    }
+    implementation ("androidx.mediarouter:mediarouter:1.7.0") {
+        exclude group: 'androidx.recyclerview', module: "recyclerview"
+    }
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
+
     compileOnly 'org.checkerframework:checker-qual:2.5.2'
     compileOnly 'org.checkerframework:checker-compat-qual:2.5.0'
-    implementation "com.google.firebase:firebase-messaging:23.4.1"
-    implementation "com.google.firebase:firebase-crashlytics:18.6.2"
+    implementation "com.google.firebase:firebase-messaging:$fcmVersion"
+    implementation "com.google.firebase:firebase-crashlytics:$crashlyticsVersion"
     implementation 'com.google.android.gms:play-services-maps:18.1.0'
     implementation 'com.google.android.gms:play-services-auth:20.4.0'
     implementation 'com.google.android.gms:play-services-vision:20.1.3'
@@ -254,47 +317,79 @@ dependencies {
     implementation 'com.google.android.gms:play-services-wallet:19.1.0'
     implementation "com.googlecode.mp4parser:isoparser:1.0.6"
     implementation 'com.stripe:stripe-android:2.0.2'
+    // add for auto translate
     implementation 'com.google.mlkit:language-id:17.0.6'
     implementation 'com.android.billingclient:billing:7.1.1'
     implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'com.google.guava:guava:31.1-android'
     implementation 'com.google.android.play:integrity:1.3.0'
     implementation 'com.google.android.gms:play-services-safetynet:18.0.1'
+
     implementation 'com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1'
     implementation 'com.google.android.gms:play-services-mlkit-image-labeling:16.0.8'
+
     implementation "androidx.credentials:credentials:1.6.0-alpha04"
     implementation "androidx.credentials:credentials-play-services-auth:1.6.0-alpha04"
+
     implementation "io.noties.markwon:core:4.6.2"
     implementation "io.noties.markwon:ext-strikethrough:4.6.2"
     implementation "io.noties.markwon:ext-tables:4.6.2"
     implementation "io.noties.markwon:html:4.6.2"
     implementation "io.noties.markwon:inline-parser:4.6.2"
     implementation "io.noties.markwon:ext-latex:4.6.2"
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.0") { because("kotlin-stdlib-jdk8 is now a part of kotlin-stdlib") }
-    implementation ('com.google.android.recaptcha:recaptcha:18.7.1') { exclude group: "com.google.crypto.tink", module: "tink-android" }
+
+//    implementation 'com.google.mlkit:translate:17.0.3'
+
+//    constraints {
+//        implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.0") {
+//            because("kotlin-stdlib-jdk7 is now a part of kotlin-stdlib")
+//        }
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.0") {
+            because("kotlin-stdlib-jdk8 is now a part of kotlin-stdlib")
+        }
+//    }
+    implementation ('com.google.android.recaptcha:recaptcha:18.7.1') {
+        exclude group: "com.google.crypto.tink", module: "tink-android"
+    }
+
     testImplementation "junit:junit:4.13.2"
     testImplementation "androidx.test:core:1.5.0"
     testImplementation "org.robolectric:robolectric:4.16.1"
+
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+}
+dependencies {
     implementation "androidx.browser:browser:1.8.0"
     implementation "androidx.viewpager:viewpager:1.0.0"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
+    // map
     implementation "org.maplibre.gl:android-sdk:11.13.5"
+
+    // ktor
     implementation "io.ktor:ktor-client-core:3.3.0"
     implementation "io.ktor:ktor-client-okhttp:3.3.0"
     implementation "io.ktor:ktor-client-content-negotiation:3.3.0"
     implementation "io.ktor:ktor-serialization-kotlinx-json-jvm:3.3.0"
     implementation "io.ktor:ktor-client-logging:3.3.0"
+
     implementation "cn.hutool:hutool-core:5.8.42"
     implementation "cn.hutool:hutool-crypto:5.8.42"
     implementation 'cn.hutool:hutool-http:5.8.42'
     implementation "com.jakewharton:process-phoenix:3.0.0"
+    // openpgp
     implementation project(":openpgp-api")
+
     compileOnly fileTree("libs")
+
+    // add for undo and redo
     implementation 'org.lsposed.hiddenapibypass:hiddenapibypass:6.1'
+    // add splash screen
     implementation("androidx.core:core-splashscreen:1.2.0")
+    // add for emoji
     implementation 'com.jaredrummler:truetypeparser-light:1.0.0'
+    // add for up
     implementation 'org.unifiedpush.android:connector:3.1.2'
+    // add for copy webm and tgs to gif
     implementation "com.airbnb.android:lottie:6.4.1"
 }
 
@@ -302,26 +397,137 @@ apply plugin: "com.google.gms.google-services"
 apply plugin: "com.google.firebase.crashlytics"
 
 sentry {
+    // Disables or enables debug log output, e.g. for for sentry-cli.
+    // Default is disabled.
     debug = false
+
+    // The slug of the Sentry organization to use for uploading proguard mappings/source contexts.
     org = "pagermaid"
+
+    // The slug of the Sentry project to use for uploading proguard mappings/source contexts.
     projectName = "nagram"
+
+    // The authentication token to use for uploading proguard mappings/source contexts.
+    // WARNING: Do not expose this token in your build.gradle files, but rather set an environment
+    // variable and read it into this property.
     authToken = sentry_token
+
+    // The url of your Sentry instance. If you're using SAAS (not self hosting) you do not have to
+    // set this. If you are self hosting you can set your URL here
     url = null
+
+    // Disables or enables the handling of Proguard mapping for Sentry.
+    // If enabled the plugin will generate a UUID and will take care of
+    // uploading the mapping to Sentry. If disabled, all the logic
+    // related to proguard mapping will be excluded.
+    // Default is enabled.
     includeProguardMapping = sentry_upload
+
+    // Whether the plugin should attempt to auto-upload the mapping file to Sentry or not.
+    // If disabled the plugin will run a dry-run and just generate a UUID.
+    // The mapping file has to be uploaded manually via sentry-cli in this case.
+    // Default is enabled.
     autoUploadProguardMapping = sentry_upload
+
+    // Experimental flag to turn on support for GuardSquare's tools integration (Dexguard and External Proguard).
+    // If enabled, the plugin will try to consume and upload the mapping file produced by Dexguard and External Proguard.
+    // Default is disabled.
     dexguardEnabled = false
+
+    // Disables or enables the automatic configuration of Native Symbols
+    // for Sentry. This executes sentry-cli automatically so
+    // you don't need to do it manually.
+    // Default is disabled.
     uploadNativeSymbols = sentry_upload
+
+    // Whether the plugin should attempt to auto-upload the native debug symbols to Sentry or not.
+    // If disabled the plugin will run a dry-run.
+    // Default is enabled.
     autoUploadNativeSymbols = sentry_upload
+
+    // Does or doesn't include the source code of native code for Sentry.
+    // This executes sentry-cli with the --include-sources param. automatically so
+    // you don't need to do it manually.
+    // This option has an effect only when [uploadNativeSymbols] is enabled.
+    // Default is disabled.
     includeNativeSources = false
+
+    // Generates a JVM (Java, Kotlin, etc.) source bundle and uploads your source code to Sentry.
+    // This enables source context, allowing you to see your source
+    // code as part of your stack traces in Sentry.
     includeSourceContext = sentry_upload
+
+    // Configure additional directories to be included in the source bundle which is used for
+    // source context. The directories should be specified relative to the Gradle module/project's
+    // root. For example, if you have a custom source set alongside 'main', the parameter would be
+    // 'src/custom/java'.
     additionalSourceDirsForSourceContext = []
+
+    // Enable or disable the tracing instrumentation.
+    // Does auto instrumentation for specified features through bytecode manipulation.
+    // Default is enabled.
     tracingInstrumentation {
         enabled = true
+
+        // Specifies a set of instrumentation features that are eligible for bytecode manipulation.
+        // Defaults to all available values of InstrumentationFeature enum class.
         features = [InstrumentationFeature.DATABASE, InstrumentationFeature.FILE_IO, InstrumentationFeature.OKHTTP, InstrumentationFeature.COMPOSE]
-        logcat { enabled = true; minLevel = LogcatLevel.WARNING }
+
+        // Enable or disable logcat instrumentation through bytecode manipulation.
+        // Default is enabled.
+        logcat {
+            enabled = true
+
+            // Specifies a minimum log level for the logcat breadcrumb logging.
+            // Defaults to LogcatLevel.WARNING.
+            minLevel = LogcatLevel.WARNING
+        }
+
+        // The set of glob patterns to exclude from instrumentation. Classes matching any of these
+        // patterns in the project's sources and dependencies JARs won't be instrumented by the Sentry
+        // Gradle plugin.
+        //
+        // Don't include the file extension. Filtering is done on compiled classes and
+        // the .class suffix isn't included in the pattern matching.
+        //
+        // Example usage:
+        // ```
+        // excludes = ['com/example/donotinstrument/**', '**/*Test']
+        // ```
+        //
+        // Only supported when using Android Gradle plugin (AGP) version 7.4.0 and above.
         excludes = []
     }
-    autoInstallation { enabled = true; sentryVersion = '8.37.1' }
+
+    // Enable auto-installation of Sentry components (sentry-android SDK and okhttp, timber and fragment integrations).
+    // Default is enabled.
+    // Only available v3.1.0 and above.
+    autoInstallation {
+        enabled = true
+
+        // Specifies a version of the sentry-android SDK and fragment, timber and okhttp integrations.
+        //
+        // This is also useful, when you have the sentry-android SDK already included into a transitive dependency/module and want to
+        // align integration versions with it (if it's a direct dependency, the version will be inferred).
+        //
+        // NOTE: if you have a higher version of the sentry-android SDK or integrations on the classpath, this setting will have no effect
+        // as Gradle will resolve it to the latest version.
+        //
+        // Defaults to the latest published Sentry version.
+        sentryVersion = '8.37.1'
+    }
+
+    // Disables or enables dependencies metadata reporting for Sentry.
+    // If enabled, the plugin will collect external dependencies and
+    // upload them to Sentry as part of events. If disabled, all the logic
+    // related to the dependencies metadata report will be excluded.
+    //
+    // Default is enabled.
     includeDependenciesReport = true
+
+    // Whether the plugin should send telemetry data to Sentry.
+    // If disabled the plugin won't send telemetry data.
+    // This is auto disabled if running against a self hosted instance of Sentry.
+    // Default is enabled.
     telemetry = true
 }
