@@ -1,4 +1,4 @@
-limport io.sentry.android.gradle.extensions.InstrumentationFeature
+import io.sentry.android.gradle.extensions.InstrumentationFeature
 import io.sentry.android.gradle.instrumentation.logcat.LogcatLevel
 
 apply plugin: "com.android.application"
