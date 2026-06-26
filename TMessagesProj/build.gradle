@@ -139,10 +139,11 @@ android {
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_STL=c++_static', 
-                          '-DANDROID_PLATFORM=android-21', 
-                          '-DCMAKE_BUILD_TYPE=MinSizeRel', 
-                          '-DANDROID_CFLAGS=-Os -g0', 
-                          '-DANDROID_CPPFLAGS=-Os -g0'
+          '-DANDROID_PLATFORM=android-21', 
+          '-DCMAKE_BUILD_TYPE=Release', 
+          '-DCMAKE_C_FLAGS=-Os -g0', 
+          '-DCMAKE_CXX_FLAGS=-Os -g0'
+
             }
         }
     }
