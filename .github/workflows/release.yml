@@ -209,6 +209,25 @@ jobs:
           echo "sdk.dir=${ANDROID_HOME}" >> local.properties
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
+      - name: Generate signing keystore
+        run: |
+          KEYSTORE_PASS="nagram"
+          ALIAS_NAME="nagram"
+          ALIAS_PASS="nagram"
+          KEYSTORE_PATH="TMessagesProj/release.keystore"
+          rm -f "$KEYSTORE_PATH"
+          keytool -genkey -v \
+            -keystore "$KEYSTORE_PATH" \
+            -alias "$ALIAS_NAME" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "$KEYSTORE_PASS" \
+            -keypass "$ALIAS_PASS" \
+            -dname "CN=Nagram, OU=Dev, O=Nagram, L=Global, S=Global, C=US"
+          # Build LOCAL_PROPERTIES from individual secrets
+          LOCAL_PROPS="KEYSTORE_PASS=$KEYSTORE_PASS\nALIAS_NAME=$ALIAS_NAME\nALIAS_PASS=$ALIAS_PASS\nTELEGRAM_APP_ID=${{ secrets.TELEGRAM_APP_ID }}\nTELEGRAM_APP_HASH=${{ secrets.TELEGRAM_APP_HASH }}"
+          echo "LOCAL_PROPERTIES=$(printf '%s' "$LOCAL_PROPS" | base64 -w 0)" >> $GITHUB_ENV
       - name: Write Firebase google-services.json
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
@@ -222,7 +241,6 @@ jobs:
           fi
       - name: Release Build
         run: |
-          export LOCAL_PROPERTIES="${{ secrets.LOCAL_PROPERTIES }}"
           ./gradlew TMessagesProj:assembleRelease --build-cache --no-configuration-cache
 
           APK=$(find TMessagesProj/build/outputs/apk -name '*arm64-v8a*.apk')
@@ -264,13 +282,10 @@ jobs:
           python-version: 3.12
       - name: Send to Telegram
         run: |
-          # send release via telegram bot api
           export mini64=$(find artifacts -name "*arm64-v8a.apk")
           export mini32=$(find artifacts -name "*armeabi-v7a.apk")
-
           echo $mini64
           echo $mini32
-
           python -m pip install -r bin/scripts/requirements.txt
           git log -1 --pretty=format:"%s%n%n%b" > artifacts/caption.txt
           python bin/scripts/upload.py ${{ secrets.HELPER_BOT_TOKEN }} ${{ secrets.HELPER_BOT_TARGET }} release
