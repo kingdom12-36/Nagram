@@ -203,18 +203,12 @@ jobs:
           path: |
             TMessagesProj/src/main/libs
           key: ${{ hashFiles('TMessagesProj/jni/**', 'ffmpeg_status', 'boringssl_status') }}-arm64-v8a
-
-          
       - name: Configure Gradle
         run: |
           sed -i "s/2000000000000/$(date +%s%3N)/g" gradle.properties
           echo "sdk.dir=${ANDROID_HOME}" >> local.properties
-
-          
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
-
-        
       - name: Generate signing keystore
         run: |
           KEYSTORE_PASS="nagram"
@@ -222,8 +216,6 @@ jobs:
           ALIAS_PASS="nagram"
           KEYSTORE_PATH="TMessagesProj/release.keystore"
           rm -f "$KEYSTORE_PATH"
-          
-          # توليد ملف الـ keystore
           keytool -genkey -v \
             -keystore "$KEYSTORE_PATH" \
             -alias "$ALIAS_NAME" \
@@ -233,8 +225,6 @@ jobs:
             -storepass "$KEYSTORE_PASS" \
             -keypass "$ALIAS_PASS" \
             -dname "CN=Nagram, OU=Dev, O=Nagram, L=Global, S=Global, C=US"
-          
-          # إنشاء ملف مؤقت يحتوي على الأسطر بشكل صحيح ونظيف
           cat << EOF > temp.properties
           KEYSTORE_PASS=$KEYSTORE_PASS
           ALIAS_NAME=$ALIAS_NAME
@@ -242,13 +232,8 @@ jobs:
           TELEGRAM_APP_ID=${{ secrets.TELEGRAM_APP_ID }}
           TELEGRAM_APP_HASH=${{ secrets.TELEGRAM_APP_HASH }}
           EOF
-          
-          # تشفير الملف إلى Base64 وتمريره للمتغير الإقليمي لـ GitHub Actions
           echo "LOCAL_PROPERTIES=$(base64 -w 0 temp.properties)" >> $GITHUB_ENV
-          
-          # تنظيف الملف المؤقت
           rm temp.properties
-
       - name: Write Firebase google-services.json
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
@@ -260,36 +245,37 @@ jobs:
             echo "--- google-services.json written from secret ---"
             grep -o '"package_name": "[^"]*"' TMessagesProj/google-services.json || true
           fi
-            # ... (نفس خطوات الـ Build السابقة)
+      - name: Force universal APK (fix native lib crash on sideload)
+        run: |
+          # With split APKs and universalApk=false, installing a single split file
+          # causes ApplicationLoader to fail finding nativeLibraryDir.
+          # universalApk=true produces one APK with all ABIs that always installs correctly.
+          sed -i 's/universalApk false/universalApk true/' TMessagesProj/build.gradle
+          echo "universalApk setting:"
+          grep -n "universalApk" TMessagesProj/build.gradle
       - name: Release Build
         run: |
           ./gradlew TMessagesProj:assembleRelease --build-cache --no-configuration-cache
-
-      # رفع الـ arm64-v8a كأرتيفاكت مستقل
       - name: Upload arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
           name: Release-arm64-v8a
           path: TMessagesProj/build/outputs/apk/release/*arm64-v8a*.apk
-
-      # رفع الـ armeabi-v7a كأرتيفاكت مستقل
       - name: Upload armeabi-v7a APK
         uses: actions/upload-artifact@v4
         with:
           name: Release-armeabi-v7a
           path: TMessagesProj/build/outputs/apk/release/*armeabi-v7a*.apk
-      
-      # رفع الـ gradle.properties (كما كنت تفعل)
+      - name: Upload universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Release-universal
+          path: TMessagesProj/build/outputs/apk/release/*universal*.apk
       - name: Upload gradle.properties
         uses: actions/upload-artifact@v4
         with:
           name: gradle-properties
           path: gradle.properties
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Release
-          path: ${{ env.APK }}
   upload:
     name: Upload release
     if: github.event.inputs.upload != 'y'
@@ -300,14 +286,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Remove gradle.properties
-        run: |
-          rm -f gradle.properties
+        run: rm -f gradle.properties
       - name: Download gradle.properties
         uses: actions/download-artifact@v4
         with:
           name: gradle-properties
           path: .
-      - name: Donwload Artifacts
+      - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -317,10 +302,16 @@ jobs:
           python-version: 3.12
       - name: Send to Telegram
         run: |
-          export mini64=$(find artifacts -name "*arm64-v8a.apk")
-          export mini32=$(find artifacts -name "*armeabi-v7a.apk")
-          echo $mini64
-          echo $mini32
+          BOT_TOKEN="${{ secrets.HELPER_BOT_TOKEN }}"
+          BOT_TARGET="${{ secrets.HELPER_BOT_TARGET }}"
+          if [ -z "$BOT_TOKEN" ] || [ -z "$BOT_TARGET" ]; then
+            echo "HELPER_BOT_TOKEN or HELPER_BOT_TARGET not configured — skipping Telegram upload."
+            exit 0
+          fi
+          export mini64=$(find artifacts -name "*arm64-v8a.apk" | head -1)
+          export mini32=$(find artifacts -name "*armeabi-v7a.apk" | head -1)
+          echo "arm64: $mini64"
+          echo "arm32: $mini32"
           python -m pip install -r bin/scripts/requirements.txt
           git log -1 --pretty=format:"%s%n%n%b" > artifacts/caption.txt
-          python bin/scripts/upload.py ${{ secrets.HELPER_BOT_TOKEN }} ${{ secrets.HELPER_BOT_TARGET }} release
+          python bin/scripts/upload.py "$BOT_TOKEN" "$BOT_TARGET" release
